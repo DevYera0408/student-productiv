@@ -15,3 +15,7 @@ dist/
 
 # Misc
 winehq.key
+
+# Database
+backend/*.db
+*.log
