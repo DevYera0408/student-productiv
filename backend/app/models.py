@@ -39,6 +39,7 @@ class User(Base):
     subject = Column(String, nullable=True)
 
     entries = relationship("Entry", back_populates="student", cascade="all, delete-orphan")
+    homework_statuses = relationship("HomeworkStatus", back_populates="student", cascade="all, delete-orphan")
 
 
 class Entry(Base):
@@ -83,3 +84,47 @@ class Entry(Base):
     teacher_grade_set = Column(Boolean, default=False)
 
     student = relationship("User", back_populates="entries")
+
+
+class ScheduleItem(Base):
+    __tablename__ = "schedule_items"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    class_num = Column(String, nullable=False)
+    class_letter = Column(String, nullable=False)
+    day_of_week = Column(Integer, nullable=False)  # 0=Monday, 6=Sunday
+    lesson_num = Column(Integer, nullable=False)
+    time_slot = Column(String, default="")
+    subject = Column(String, nullable=False)
+    room = Column(String, default="")
+    teacher_name = Column(String, default="")
+
+
+class Homework(Base):
+    __tablename__ = "homeworks"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    class_num = Column(String, nullable=False)
+    class_letter = Column(String, nullable=False)
+    subject = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(String, default="")
+    due_date = Column(Date, nullable=False)
+    created_at = Column(Date, default=date_type.today)
+    created_by = Column(String, ForeignKey("users.id"), nullable=True)
+
+    statuses = relationship("HomeworkStatus", back_populates="homework", cascade="all, delete-orphan")
+
+
+class HomeworkStatus(Base):
+    __tablename__ = "homework_statuses"
+    __table_args__ = (UniqueConstraint("homework_id", "student_id", name="uq_homework_student"),)
+
+    id = Column(String, primary_key=True, default=gen_id)
+    homework_id = Column(String, ForeignKey("homeworks.id"), nullable=False)
+    student_id = Column(String, ForeignKey("users.id"), nullable=False)
+    completed = Column(Boolean, default=False)
+
+    homework = relationship("Homework", back_populates="statuses")
+    student = relationship("User", back_populates="homework_statuses")
+

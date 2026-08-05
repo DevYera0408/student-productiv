@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -13,46 +14,42 @@ import NotFound from "./pages/NotFound";
 export default function App() {
   return (
     <Routes>
-
       <Route element={<MainLayout />}>
-
-        <Route
-          path="/"
-          element={<Home />}
-        />
-
+        <Route path="/" element={<Home />} />
       </Route>
 
-      <Route
-        path="/login"
-        element={<Login />}
-      />
-
-      <Route
-        path="/register"
-        element={<Register />}
-      />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
       <Route
         path="/student"
-        element={<StudentDashboard />}
+        element={
+          <ProtectedRoute allowedRoles={["student", "admin"]}>
+            <StudentDashboard />
+          </ProtectedRoute>
+        }
       />
 
       <Route
         path="/teacher"
-        element={<TeacherDashboard />}
+        element={
+          <ProtectedRoute allowedRoles={["teacher", "admin"]}>
+            <TeacherDashboard />
+          </ProtectedRoute>
+        }
       />
 
       <Route
         path="/admin"
-        element={<AdminDashboard />}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
       />
 
-      <Route
-        path="*"
-        element={<NotFound />}
-      />
-
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
+

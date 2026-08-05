@@ -50,3 +50,20 @@ def _clamp(n) -> float:
 def last_n_dates(n: int = 7):
     today = date.today()
     return [today - timedelta(days=i) for i in range(n - 1, -1, -1)]
+
+
+def calc_streak(entries: list) -> int:
+    if not entries:
+        return 0
+    sorted_entries = sorted(entries, key=lambda x: x.date, reverse=True)
+    streak = 0
+    current_check = date.today()
+    for e in sorted_entries:
+        diff = (current_check - e.date).days
+        if diff <= 1:
+            streak += 1
+            current_check = e.date
+        else:
+            break
+    return streak
+

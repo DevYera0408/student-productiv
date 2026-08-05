@@ -27,7 +27,7 @@ const tasks = [
 
 export default function DashboardPreview() {
   return (
-    <section className="bg-slate-950 py-28">
+    <section id="preview" className="bg-slate-950 py-28">
       <div className="mx-auto max-w-7xl px-6">
 
         <motion.div

@@ -80,4 +80,50 @@ class EntryOut(EntryIn):
 class RankingRow(BaseModel):
     student_id: str
     name: str
+    class_num: Optional[str] = ""
+    class_letter: Optional[str] = ""
     avg_productivity: int
+    stars: int = 1
+    entries_count: int = 0
+
+
+class ScheduleItemIn(BaseModel):
+    class_num: str
+    class_letter: str
+    day_of_week: int  # 0..6
+    lesson_num: int
+    time_slot: str = ""
+    subject: str
+    room: str = ""
+    teacher_name: str = ""
+
+
+class ScheduleItemOut(ScheduleItemIn):
+    id: str
+
+    class Config:
+        from_attributes = True
+
+
+class HomeworkIn(BaseModel):
+    class_num: str
+    class_letter: str
+    subject: str
+    title: str
+    description: str = ""
+    due_date: date
+
+
+class HomeworkOut(HomeworkIn):
+    id: str
+    created_at: date
+    created_by: Optional[str] = None
+    completed: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class UserRoleUpdate(BaseModel):
+    role: str
+
