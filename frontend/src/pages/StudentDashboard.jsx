@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/useAuth';
 import { getMyEntries, upsertEntry, getSchedule, getHomeworks, toggleHomework, getRanking } from '../api/student';
 import {
   LayoutDashboard,
@@ -9,17 +9,12 @@ import {
   Trophy,
   PlusCircle,
   CheckCircle2,
-  Clock,
   Star,
-  Award,
-  Zap,
   TrendingUp,
   User,
   LogOut,
   Flame,
-  AlertCircle,
-  Check,
-  X
+  Check
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -36,7 +31,6 @@ export default function StudentDashboard() {
   const [schedule, setSchedule] = useState([]);
   const [homeworks, setHomeworks] = useState([]);
   const [ranking, setRanking] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   // Daily Entry Modal state
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -61,12 +55,7 @@ export default function StudentDashboard() {
   const daysOfWeek = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница'];
   const [selectedDay, setSelectedDay] = useState(0); // 0=Monday
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  const fetchDashboardData = useCallback(async () => {
     try {
       const [entriesData, scheduleData, hwData, rankData] = await Promise.all([
         getMyEntries(7).catch(() => []),
@@ -80,10 +69,12 @@ export default function StudentDashboard() {
       setRanking(rankData);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -94,7 +85,7 @@ export default function StudentDashboard() {
     e.preventDefault();
     setSavingEntry(true);
     try {
-      const updated = await upsertEntry(entryForm);
+      await upsertEntry(entryForm);
       showToast('Запись за сегодня успешно сохранена!');
       setIsEntryModalOpen(false);
       fetchDashboardData();
@@ -117,23 +108,83 @@ export default function StudentDashboard() {
     }
   };
 
+  const calcStreak = (entriesList) => {
+    if (!entriesList || entriesList.length === 0) return 0;
+    const sorted = [...entriesList].sort((a, b) => new Date(b.date) - new Date(a.date));
+    let streak = 0;
+    let currentCheck = new Date();
+    currentCheck.setHours(0, 0, 0, 0);
+    for (const e of sorted) {
+      const eDate = new Date(e.date);
+      eDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((currentCheck - eDate) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 1) {
+        streak++;
+        currentCheck = eDate;
+      } else if (diffDays === 2 && currentCheck.getDay() === 1 && eDate.getDay() === 5) {
+        // Monday after Friday - weekend gap, continue streak
+        streak++;
+        currentCheck = eDate;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  };
+
+  const handleOpenEntryModal = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayEntry = entries.find((e) => e.date === todayStr);
+    if (todayEntry) {
+      setEntryForm({
+        avg_grade: todayEntry.avg_grade || 85,
+        lessons_count: todayEntry.lessons_count || 6,
+        tasks_done: todayEntry.tasks_done || 5,
+        homework_done: todayEntry.homework_done ?? true,
+        prep_time_min: todayEntry.prep_time_min || 60,
+        ent_prep_min: todayEntry.ent_prep_min || 45,
+        reading_min: todayEntry.reading_min || 30,
+        sleep_hours: todayEntry.sleep_hours || 8,
+        mood: todayEntry.mood || 4,
+        wellbeing: todayEntry.wellbeing || 4,
+        attended: todayEntry.attended ?? true,
+        late: todayEntry.late ?? false,
+        absent: todayEntry.absent ?? false,
+      });
+    }
+    setIsEntryModalOpen(true);
+  };
+
   // Metrics calculations
   const latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
   const latestScore = latestEntry ? latestEntry.productivity : 88;
   const latestStars = latestEntry ? latestEntry.stars : 4;
+  const streakDays = calcStreak(entries);
   const userRankIndex = ranking.findIndex((r) => r.student_id === user?.id);
-  const rankPosition = userRankIndex !== -1 ? userRankIndex + 1 : '#3';
+  const rankPosition = userRankIndex !== -1 ? `#${userRankIndex + 1}` : '#1';
 
   // Attendance breakdown
-  const attendedCount = entries.filter((e) => e.attended && !e.late).length || 5;
-  const lateCount = entries.filter((e) => e.late).length || 1;
+  const attendedCount = entries.filter((e) => e.attended && !e.late).length || (entries.length ? 0 : 5);
+  const lateCount = entries.filter((e) => e.late).length || (entries.length ? 0 : 1);
   const absentCount = entries.filter((e) => e.absent).length || 0;
+  const totalDaysLogged = entries.length || 6;
+  const attendanceRate = totalDaysLogged > 0
+    ? Math.round(((attendedCount + lateCount * 0.7) / totalDaysLogged) * 100)
+    : 96;
 
   // Chart data
   const productivityChartData = entries.map((e) => ({
     date: new Date(e.date).toLocaleDateString('ru-RU', { weekday: 'short' }),
     productivity: e.productivity,
   }));
+
+  const progressBreakdownData = latestEntry ? [
+    { name: 'Учёба', val: Math.round(latestEntry.avg_grade || 85) },
+    { name: 'Д/З', val: latestEntry.homework_done ? 100 : 0 },
+    { name: 'ЕНТ', val: Math.min(100, Math.round(((latestEntry.ent_prep_min || 0) / 90) * 100)) },
+    { name: 'Чтение', val: Math.min(100, Math.round(((latestEntry.reading_min || 0) / 30) * 100)) },
+    { name: 'Режим', val: Math.round(((Math.max(0, 100 - Math.abs((latestEntry.sleep_hours || 7.5) - 8) * 15) + (latestEntry.mood || 3) * 20 + (latestEntry.wellbeing || 3) * 20) / 3)) },
+  ] : [];
 
   const filteredSchedule = schedule.filter((item) => item.day_of_week === selectedDay);
 
@@ -194,7 +245,7 @@ export default function StudentDashboard() {
 
         <div className="pt-6 border-t border-slate-800/80 mt-6 space-y-3">
           <Button
-            onClick={() => setIsEntryModalOpen(true)}
+            onClick={handleOpenEntryModal}
             variant="primary"
             className="w-full py-3 shadow-lg shadow-cyan-500/20"
           >
@@ -225,7 +276,7 @@ export default function StudentDashboard() {
               <div className="flex items-center gap-3">
                 <span className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl text-xs font-semibold text-slate-300 flex items-center gap-2">
                   <Flame className="w-4 h-4 text-amber-400" />
-                  Серия: <strong className="text-amber-400">4 дня подряд</strong>
+                  Серия: <strong className="text-amber-400">{streakDays} дн. подряд</strong>
                 </span>
               </div>
             </div>
@@ -254,26 +305,26 @@ export default function StudentDashboard() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Рейтинг в школе</p>
-                    <h3 className="text-4xl font-black text-amber-400 mt-2">#{rankPosition}</h3>
+                    <h3 className="text-4xl font-black text-amber-400 mt-2">{rankPosition}</h3>
                   </div>
                   <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-400">
                     <Trophy className="w-6 h-6" />
                   </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-4">Топик класса 10"А"</p>
+                <p className="text-xs text-slate-400 mt-4">Топик класса {user?.class_num || '10'}"{user?.class_letter || 'A'}"</p>
               </Card>
 
               <Card>
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Посещаемость</p>
-                    <h3 className="text-4xl font-black text-emerald-400 mt-2">96%</h3>
+                    <h3 className="text-4xl font-black text-emerald-400 mt-2">{attendanceRate}%</h3>
                   </div>
                   <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-4">18 посещений за месяц</p>
+                <p className="text-xs text-slate-400 mt-4">{attendedCount} посещений из {totalDaysLogged} дней</p>
               </Card>
 
               <Card>
@@ -484,7 +535,7 @@ export default function StudentDashboard() {
 
               <Card>
                 <h3 className="text-lg font-bold text-white mb-4">Распределение успеваемости</h3>
-                <ProgressChart />
+                <ProgressChart data={progressBreakdownData} />
               </Card>
             </div>
           </div>
@@ -574,6 +625,28 @@ export default function StudentDashboard() {
               />
             </div>
             <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Уроков всего / Выполнено задач</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Уроков"
+                  value={entryForm.lessons_count}
+                  onChange={(e) => setEntryForm({ ...entryForm, lessons_count: parseInt(e.target.value) || 0 })}
+                  className="w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
+                <input
+                  type="number"
+                  placeholder="Задач"
+                  value={entryForm.tasks_done}
+                  onChange={(e) => setEntryForm({ ...entryForm, tasks_done: parseInt(e.target.value) || 0 })}
+                  className="w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Время на ЕНТ (мин)</label>
               <input
                 type="number"
@@ -582,11 +655,8 @@ export default function StudentDashboard() {
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Самостоятельная учеба (мин)</label>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Самостоятельно (мин)</label>
               <input
                 type="number"
                 value={entryForm.prep_time_min}
@@ -605,7 +675,7 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Сон (часы)</label>
               <input
@@ -626,6 +696,56 @@ export default function StudentDashboard() {
                 onChange={(e) => setEntryForm({ ...entryForm, mood: parseInt(e.target.value) || 3 })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Самочувствие (1-5)</label>
+              <input
+                type="number"
+                min="1"
+                max="5"
+                value={entryForm.wellbeing}
+                onChange={(e) => setEntryForm({ ...entryForm, wellbeing: parseInt(e.target.value) || 3 })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Посещаемость</label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setEntryForm({ ...entryForm, attended: true, late: false, absent: false })}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold ${
+                  entryForm.attended && !entryForm.late && !entryForm.absent
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                Присутствовал
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryForm({ ...entryForm, attended: true, late: true, absent: false })}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold ${
+                  entryForm.late
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                Опоздал
+              </button>
+              <button
+                type="button"
+                onClick={() => setEntryForm({ ...entryForm, attended: false, late: false, absent: true })}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold ${
+                  entryForm.absent
+                    ? 'bg-red-500/20 border-red-500 text-red-400'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                Пропустил
+              </button>
             </div>
           </div>
 

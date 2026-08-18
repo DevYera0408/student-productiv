@@ -9,4 +9,5 @@ python-jose[cryptography]>=3.4.0
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.20
 gunicorn>=23.0.0
+slowapi>=0.1.9
 

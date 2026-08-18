@@ -1,20 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { getStudents, getStudentEntries, teacherUpdateStudent, createHomework, addScheduleItem } from '../api/teacher';
+import { useAuth } from '../context/useAuth';
+import { getStudents, getStudentEntries, teacherUpdateStudent, createHomework } from '../api/teacher';
+import { getHomeworks } from '../api/student';
 import {
   Users,
   BookOpen,
-  Calendar,
   PlusCircle,
   CheckCircle2,
   Edit,
-  MessageSquare,
   LogOut,
-  Sparkles,
-  School,
   Search,
-  Check,
-  X
+  History
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -25,6 +21,7 @@ export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState('students');
 
   const [students, setStudents] = useState([]);
+  const [homeworks, setHomeworks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentEntries, setStudentEntries] = useState([]);
@@ -54,16 +51,20 @@ export default function TeacherDashboard() {
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
-    fetchStudents();
+    fetchTeacherData();
   }, []);
 
-  const fetchStudents = async () => {
+  const fetchTeacherData = async () => {
     setLoading(true);
     try {
-      const data = await getStudents();
-      setStudents(data);
+      const [studentsData, hwData] = await Promise.all([
+        getStudents().catch(() => []),
+        getHomeworks().catch(() => []),
+      ]);
+      setStudents(studentsData);
+      setHomeworks(hwData);
     } catch (err) {
-      console.error('Failed to load students:', err);
+      console.error('Failed to load teacher data:', err);
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ export default function TeacherDashboard() {
       const entries = await getStudentEntries(student.id, 7);
       setStudentEntries(entries);
       setIsEditModalOpen(true);
-    } catch (err) {
+    } catch {
       alert('Ошибка загрузки записей ученика');
     }
   };
@@ -91,8 +92,9 @@ export default function TeacherDashboard() {
 
     try {
       await teacherUpdateStudent(selectedStudent.id, updateForm);
-      showToast('Отметка учителя упешно сохранена!');
+      showToast('Отметка учителя успешно сохранена!');
       setIsEditModalOpen(false);
+      fetchTeacherData();
     } catch (err) {
       alert(err.response?.data?.detail || 'Ошибка сохранения');
     }
@@ -112,6 +114,7 @@ export default function TeacherDashboard() {
         description: '',
         due_date: new Date().toISOString().split('T')[0],
       });
+      fetchTeacherData();
     } catch (err) {
       alert(err.response?.data?.detail || 'Ошибка создания домашнего задания');
     }
@@ -277,6 +280,35 @@ export default function TeacherDashboard() {
                 <span>Создать ДЗ</span>
               </Button>
             </div>
+
+            <div className="grid gap-4">
+              {homeworks.length > 0 ? (
+                homeworks.map((hw) => (
+                  <Card key={hw.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="px-2.5 py-1 bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold rounded-lg">
+                          {hw.class_num}"{hw.class_letter}" — {hw.subject}
+                        </span>
+                        <span className="text-xs text-slate-400">Срок: {hw.due_date}</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-white mt-2">{hw.title}</h3>
+                      {hw.description && <p className="text-sm text-slate-400 mt-1">{hw.description}</p>}
+                    </div>
+                    <div className="text-right">
+                      <span className="px-3 py-1 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium">
+                        Выдано {hw.created_at || 'сегодня'}
+                      </span>
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <div className="text-center py-16 bg-slate-900/40 rounded-3xl border border-slate-800">
+                  <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-slate-400 text-sm">Домашних заданий пока нет</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
@@ -288,6 +320,27 @@ export default function TeacherDashboard() {
         title={`Оценка и отзыв: ${selectedStudent?.name || ''}`}
       >
         <form onSubmit={handleSaveTeacherUpdate} className="space-y-4">
+          {/* Student recent history snippet */}
+          {studentEntries.length > 0 && (
+            <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/50 mb-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-violet-400 mb-2">
+                <History className="w-4 h-4" />
+                <span>Последняя активность ученика</span>
+              </div>
+              <div className="space-y-1.5 text-xs text-slate-300">
+                {studentEntries.slice(0, 3).map((e) => (
+                  <div key={e.id} className="flex justify-between items-center bg-slate-900/60 px-3 py-1.5 rounded-xl">
+                    <span>{e.date}</span>
+                    <span className="font-semibold text-cyan-400">Индекс: {e.productivity}%</span>
+                    <span>Балл: {e.avg_grade}</span>
+                    <span className={e.absent ? 'text-red-400' : e.late ? 'text-amber-400' : 'text-emerald-400'}>
+                      {e.absent ? 'Пропуск' : e.late ? 'Опоздал' : 'Был'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Дата</label>
             <input

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { getAdminStats, getAllUsers, updateUserRole } from '../api/admin';
 import {
   ShieldCheck,
@@ -9,10 +9,8 @@ import {
   TrendingUp,
   LogOut,
   Search,
-  CheckCircle2,
-  UserCheck
+  CheckCircle2
 } from 'lucide-react';
-import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 
 export default function AdminDashboard() {
@@ -20,7 +18,6 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
@@ -28,7 +25,6 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchAdminData = async () => {
-    setLoading(true);
     try {
       const [statsData, usersData] = await Promise.all([
         getAdminStats().catch(() => null),
@@ -38,8 +34,6 @@ export default function AdminDashboard() {
       setUsersList(usersData);
     } catch (err) {
       console.error('Failed to load admin data:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -55,7 +49,7 @@ export default function AdminDashboard() {
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       );
       showToast('Роль пользователя успешно обновлена!');
-    } catch (err) {
+    } catch {
       alert('Ошибка при обновлении роли');
     }
   };

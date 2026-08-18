@@ -63,6 +63,10 @@ def calc_streak(entries: list) -> int:
         if diff <= 1:
             streak += 1
             current_check = e.date
+        elif diff == 2 and current_check.weekday() == 0 and e.date.weekday() == 4:
+            # Monday after Friday - weekend gap, continue streak
+            streak += 1
+            current_check = e.date
         else:
             break
     return streak

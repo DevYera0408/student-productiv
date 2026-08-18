@@ -40,6 +40,7 @@ class User(Base):
 
     entries = relationship("Entry", back_populates="student", cascade="all, delete-orphan")
     homework_statuses = relationship("HomeworkStatus", back_populates="student", cascade="all, delete-orphan")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
 
 
 class Entry(Base):
@@ -127,4 +128,27 @@ class HomeworkStatus(Base):
 
     homework = relationship("Homework", back_populates="statuses")
     student = relationship("User", back_populates="homework_statuses")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    created_at = Column(Date, nullable=False, default=date_type.today)
+    expires_at = Column(Date, nullable=False)
+    revoked = Column(Boolean, default=False, nullable=False)
+    replaced_by = Column(String, ForeignKey("refresh_tokens.id"), nullable=True)
+
+    user = relationship("User", back_populates="refresh_tokens")
+
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    revoked_at = Column(Date, nullable=False, default=date_type.today)
+    expires_at = Column(Date, nullable=False)
 
